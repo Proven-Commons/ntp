@@ -2,7 +2,20 @@
 
 A Lean parser for the NTP wire packet. This is a Proven Commons project: it rebuilds a widely used format in Lean and proves the new code follows its written specification.
 
-Status: not verified. No code has landed yet. Plan issue 1 holds the first slice, and it is unclaimed. The specification has not been approved by a reviewer, so do not call this verified.
+Status: not verified. The first parser slice is claimed in plan issue 1 and remains under its author's ownership. The specification has not been approved by a reviewer.
+
+## Wire contract under review
+
+[WIRE-CONTRACT.md](WIRE-CONTRACT.md) proposes a contract for the parser author to review. It comes with 79 fixed packet vectors, a Python reference oracle, and a JSON adapter runner. It adds no Lean implementation or proof. The protocol contract still needs independent review before integration.
+
+Run the fixtures and boundary checks:
+
+```
+python3 -m unittest discover -s tests -v
+python3 tests/check_vectors.py
+```
+
+A future parser adapter can consume the same fixtures with `python3 tests/check_vectors.py -- COMMAND ARGUMENTS`. The runner checks every response and fails on a missing answer, wrong answer, nonzero exit, or timeout.
 
 ## First slice
 
