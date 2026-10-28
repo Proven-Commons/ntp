@@ -1,6 +1,6 @@
 # ntp: reading the NTP packet, proved
 
-NTP, the Network Time Protocol, sets the clocks of most computers on the internet, and its packets come from anyone who can send a UDP datagram to port 123. A program that reads them takes lengths from the packet and follows them: extension fields carry their own Length, and a MAC may or may not follow them. ntpd has had out-of-bounds reads from lengths it did not check, such as CVE-2014-9750, and readers still disagree on what follows the header of a version 3 packet.
+NTP, the Network Time Protocol, sets the clocks of computers across the internet, and its packets come from anyone who can send a UDP datagram to port 123. A program that reads them takes lengths from the packet and follows them: extension fields carry their own Length, and a MAC may or may not follow them. ntpd has followed lengths from the packet that it did not check, such as the Autokey value length of CVE-2014-9750, which could leak its memory, and readers still disagree on what follows the header of a version 3 packet.
 
 This library reads and writes one NTP packet, the whole of one UDP payload, in Lean:
 
@@ -10,7 +10,7 @@ This library reads and writes one NTP packet, the whole of one UDP payload, in L
 
 Machine-checked proofs show:
 
-- **The reader accepts exactly the packets the RFCs allow, and gives back what they hold.** It accepts a payload exactly when it is the octets of a packet that `Spec/Defs.lean` writes down from RFC 5905 and RFC 7822, and gives that packet. So it reads each payload one way only.
+- **The reader accepts exactly the packets of the specification, and gives back what they hold.** It accepts a payload exactly when it is the octets of a packet that `Spec/Defs.lean` writes down from RFC 5905 and RFC 7822, and gives that packet. So it reads each payload one way only.
 - **Lengths in the packet are checked.** A payload shorter than the header is refused, and so is an extension field whose Length runs past the end of the packet, wherever it is. So are versions other than 3 and 4, and modes 0, 6 and 7.
 - **Writing and reading agree.** The writer writes each valid packet as the RFCs lay it out, and reading what it wrote gives the packet back.
 - **Timestamp conversion is exact.** A timestamp in a given era converts to the exact Unix time, and back. The timestamp 0, which means unknown, converts to nothing in every era, never to 1900.
