@@ -28,4 +28,5 @@ code = ["Ntp.decode", "Ntp.encode", "Ntp.toUnix", "Ntp.fromUnix"]
 [tests]
 results = "tests/TEST-RESULTS.md"
 command = "python3 tests/run_tests.py"
-files = ["tests/run_tests.py", "tests/plant_bugs.py"]
+files = ["tests/run_tests.py", "tests/plant_bugs.py", "tests/ntpd-rs/Cargo.toml", "tests/ntpd-rs/Cargo.lock",
+         "tests/ntpd-rs/src/main.rs", "tests/ntp-3-wire-vectors.jsonl"]

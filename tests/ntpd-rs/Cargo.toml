@@ -1,0 +1,15 @@
+# A small program that reads NTP packets with the packet parser of
+# ntpd-rs (the ntp-proto crate), for tests/run_tests.py. Cargo.lock pins
+# every crate it builds with. The feature __internal-api is the one
+# ntpd-rs's own daemon uses to reach the packet type.
+[package]
+name = "ntpdrs-oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ntp-proto = { version = "=1.9.0", default-features = false, features = ["rustcrypto", "__internal-api"] }
+
+[profile.release]
+debug-assertions = false

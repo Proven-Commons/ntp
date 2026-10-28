@@ -15,11 +15,11 @@ Machine-checked proofs show:
 - **Writing and reading agree.** The writer writes each valid packet as the RFCs lay it out, and reading what it wrote gives the packet back.
 - **Timestamp conversion is exact.** A timestamp in a given era converts to the exact Unix time, and back. The timestamp 0, which means unknown, converts to nothing in every era, never to 1900.
 
-It is a project of [Proven Commons](https://github.com/Proven-Commons/mission), built to the verified bar published there. Differential tests against other NTP implementations are not in the repo yet.
+It is tested against a model of the RFCs, and against the packet readers of ntpd-rs, NTPsec, Wireshark and ntplib; `tests/TEST-RESULTS.md` holds the record. It is a project of [Proven Commons](https://github.com/Proven-Commons/mission), built to the verified bar published there.
 
 This reads and writes NTP packets. It does not keep time: it is not an NTP client or server, and it does not check MACs.
 
-Status: in progress. The specification has not yet been approved by a reviewer apart from its author, and the differential tests are still to come, so this is not verified.
+Status: in progress. The specification has not yet been approved by a reviewer apart from its author, so this is not verified.
 
 ## Use it
 
@@ -62,7 +62,7 @@ The packets this reader accepts are those of version 3 or 4 and mode 1 to 5, who
 - **The protocol.** No on-wire exchange, clock filter, peer selection or clock discipline. Modes 6 and 7 are refused, not read.
 - **Encoding a packet that is not valid.** What the encoder writes for one is not specified.
 - **Time and memory.** No proof bounds them.
-- **Reading requests and printing answers in `Main.lean`.** The differential tests will cover them.
+- **Reading requests and printing answers in `Main.lean`.** The differential tests cover them.
 
 ## What you must trust
 
@@ -72,12 +72,13 @@ The packets this reader accepts are those of version 3 or 4 and mode 1 to 5, who
 - The Lean compiler, with the C compiler and linker shipped with it, and the runtime, which turn the proved definitions into the program that runs.
 - Lean's core library, including the compiled code it puts in place of some definitions the proofs reason about, such as natural number and integer arithmetic, `UInt8`, and lists.
 - The operating system and hardware it runs on.
+- For the tests only: the model in `tests/run_tests.py`, and the other readers of the packet that the record names.
 
 This project has no dependencies beyond Lean itself.
 
 ## Re-check it
 
-Needs Linux, [elan](https://github.com/leanprover/elan), bubblewrap (`apt install bubblewrap`) and Python 3.
+Needs Linux, [elan](https://github.com/leanprover/elan), bubblewrap (`apt install bubblewrap`) and Python 3. The tests also use, when they are installed at the versions the record names, Rust's `cargo` (to build ntpd-rs's packet parser), NTPsec's Python module (`apt install python3-ntp`), tshark (`apt install tshark`) and ntplib (`pip install ntplib==0.4.0`); one that is missing is left out, and the record says so.
 
 ```
 lake build
@@ -86,7 +87,9 @@ python3 tests/run_tests.py
 python3 tests/plant_bugs.py
 ```
 
-`lake comparator --paranoid` builds the statements and the proofs in a sandbox. It checks that each theorem in `Proofs/` proves exactly the statement in `Spec.lean`, using only the axioms `propext`, `Classical.choice`, and `Quot.sound`, and replays it through every kernel shipped with Lean. The two test scripts come with the differential tests, which are not in the repo yet.
+`lake comparator --paranoid` builds the statements and the proofs in a sandbox. It checks that each theorem in `Proofs/` proves exactly the statement in `Spec.lean`, using only the axioms `propext`, `Classical.choice`, and `Quot.sound`, and replays it through every kernel shipped with Lean.
+
+`tests/run_tests.py` sends the tool packets and timestamps from a recorded seed and checks every answer against a model of RFC 5905 and RFC 7822 written in Python. It reads the same packets with the other readers, and counts each difference under the choice of that reader's that makes it, such as ntpd-rs taking any 4 to 24 octets after the fields as a MAC, or NTPsec reading Poll as unsigned; the model, with those choices, gives each reader's answer. `tests/plant_bugs.py` plants one-line bugs in the code and checks that the tests catch each one.
 
 ## Layout
 
@@ -99,4 +102,5 @@ python3 tests/plant_bugs.py
 - `lakefile.toml`: the build. It names the package and its version, its libraries and executable, and the default targets, and sets nothing else.
 - `comparator.json`: which theorems `lake comparator` checks, and which axioms it allows.
 - `bar.toml`: the record for the bar check: status, authors, approvals, and where things are.
+- `tests/`: the differential tests, the planted bugs, the program that reads packets with ntpd-rs's parser (`tests/ntpd-rs`), and the vectors of pull request 3.
 - `SPEC.md`: the specification in plain words.
