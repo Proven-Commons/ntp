@@ -98,10 +98,14 @@ Inputs come from a recorded seed:
   crypto-NAK, in versions 3 and 4;
 - such packets with one rule broken: a field of Length 0 to 12, a Length
   that is not a multiple of 4, a Length running 4 or 1000 octets past
-  the end, or to 65532 or 65535 (the shape of CVE-2014-9750), a last
-  field of 16 to 24 octets with no MAC, a MAC of 8 to 16, 21 to 23 or
-  28 octets, four octets that are not zero, a crypto-NAK after a field,
-  a field in version 3, another version or mode, an octet more or less;
+  the end, or to 65532 or 65535 (CVE-2014-9750's flaw, at the level of
+  the field's own Length), a last field of 16 to 24 octets with no MAC,
+  a MAC of 8 to 16, 21 to 23 or 28 octets, four octets that are not
+  zero, a crypto-NAK after a field, a field in version 3, another
+  version or mode, an octet more or less;
+- Autokey fields laid out as RFC 5906 Figure 7 whose Value Length runs
+  past the field, as in CVE-2014-9750: each must be read by its own
+  Length, with its octets unchanged, and the record counts them;
 - after the client request and after a version 3 header, tails of every
   length from 0 to 80: zeros, random octets, all ones, and one field of
   that length; a field of every Length from 0 to 80 with and without a
@@ -303,11 +307,13 @@ WHY_SHORT = "fewer than 48 octets (RFC 5905 7.3: the header is 12 words)"
 WHY_VERSION = "a version other than 3 and 4"
 WHY_MODE = "mode 0, 6 or 7 (RFC 5905 Figure 10)"
 WHY_V3 = ("version 3, with octets after the header that are not a MAC of 20 or 24 octets or a "
-          "crypto-NAK (RFC 7822 section 3: extension fields are NTPv4's)")
+          "crypto-NAK (this reader's choice: the MACs of NTPv4, and no extension fields, which RFC "
+          "7822 section 3 gives to NTPv4; RFC 1305's own authenticator is 12 octets)")
 WHY_NAK = "four octets after the header that are not zero (RFC 5905 9.2: the crypto-NAK is zeros)"
 WHY_SMALL = "a field of Length below 16 (RFC 7822 section 3)"
 WHY_ALIGN = "a field Length that is not a multiple of 4 (RFC 7822 section 3)"
-WHY_PAST = "a field Length past the end of the packet (the shape of CVE-2014-9750)"
+WHY_PAST = ("a field Length past the end of the packet (CVE-2014-9750's flaw, at the level of the "
+            "field's own Length)")
 WHY_NAK_FIELDS = "four zero octets after extension fields: the crypto-NAK is a packet's only tail"
 WHY_LEFT_WORDS = ("8, 12 or 16 octets left after the fields: not a MAC (RFC 7822 7.5.1.3), and a last "
                   "field without a MAC is at least 28 (7.5.1.4)")
@@ -709,6 +715,10 @@ WITH_MAC = CLIENT + FIELD16 + FIELD20 + MAC20
 CRYPTO_NAK = SERVER + bytes(4)
 V3_WITH_MAC = bytes([0x1B]) + CLIENT[1:] + MAC20
 TAIL24 = bytes([0x01, 0x04, 0x00, 0x18]) + bytes(range(0x31, 0x45))
+# An Autokey ASSOC request field (RFC 5906 Figure 7 and 10.2) of 28
+# octets whose Value Length, 0xFFFFFFFF, runs past it (CVE-2014-9750).
+AUTOKEY_ASSOC = (bytes([0x01, 0x02, 0x00, 0x1C, 0, 0, 0, 1]) + bytes(8) + b"\xff\xff\xff\xff" + b"host"
+                 + bytes(4))
 # clientHeader, serverHeader and ntsHeader, as Spec/Examples.lean gives
 # them field by field.
 CLIENT_HEADER = Header(0, 4, 3, 2, 6, -24, 0x000003FF, 0x0000037D, 0x5EC69F0F, 0xE5F662987B61B9AF,
@@ -724,6 +734,17 @@ def stated(h, fields=(), mac=b""):
     return "OK " + show_packet((h, fields, mac))
 
 
+# What Spec.lean states of an input it says only is accepted
+# (`(Ntp.decode b).isSome`): any `OK` answer.
+ACCEPTED = "OK, any packet"
+
+
+def as_stated(answer, stated_answer):
+    if stated_answer == ACCEPTED:
+        return answer.startswith("OK ")
+    return answer == stated_answer
+
+
 SPEC_CASES = [
     # examples
     ("decode", [CLIENT], stated(CLIENT_HEADER)),
@@ -733,6 +754,7 @@ SPEC_CASES = [
     ("decode", [CRYPTO_NAK], stated(SERVER_HEADER, (), bytes(4))),
     ("decode", [V3_WITH_MAC], stated(CLIENT_HEADER._replace(version=3), (), MAC20)),
     ("decode", [CLIENT + TAIL24], stated(CLIENT_HEADER, (), TAIL24)),
+    ("decode", [CLIENT + AUTOKEY_ASSOC + MAC20], stated(CLIENT_HEADER, ((0x0102, AUTOKEY_ASSOC[4:]),), MAC20)),
     ("encode", [(SERVER_HEADER, (), b"")], f"OK {SERVER.hex()}"),
     ("unix", [0, 0xE5F663A8798EAE2B], f"OK 1649141032 {0x798EAE2B}"),
     ("fromunix", [1649141032, 0x798EAE2B], f"OK 0 {0xE5F663A8798EAE2B}"),
@@ -744,20 +766,28 @@ SPEC_CASES = [
     ("fromunix", [2085978496, 0], "FAIL"),
     ("fromunix", [2085978496, 1], "OK 1 1"),
     ("unix", [-1, 0xFFFFFFFF00000000], "OK -2208988801 0"),
-    # rejects
+    # rejects: each refused packet after the accepted one it differs
+    # from only in the rule it breaks (the server reply and the
+    # crypto-NAK are above)
     ("decode", [bytes([0x14]) + SERVER[1:]], "FAIL"),
     ("decode", [bytes([0x2C]) + SERVER[1:]], "FAIL"),
     ("decode", [bytes([0x20]) + SERVER[1:]], "FAIL"),
     ("decode", [bytes([0x26]) + SERVER[1:]], "FAIL"),
     ("decode", [bytes([0x27]) + SERVER[1:]], "FAIL"),
     ("decode", [SERVER[:47]], "FAIL"),
+    ("decode", [CLIENT + bytes([1, 4, 0, 0x10]) + bytes([0x5A] * 12) + FIELD28], ACCEPTED),
     ("decode", [CLIENT + bytes([1, 4, 0, 0x0C]) + bytes([0x5A] * 8) + FIELD28], "FAIL"),
+    ("decode", [CLIENT + bytes([1, 4, 0, 0x20]) + bytes([0x5A] * 28)], ACCEPTED),
     ("decode", [CLIENT + bytes([1, 4, 0, 0x1E]) + bytes([0x5A] * 26)], "FAIL"),
     ("decode", [CLIENT + bytes([1, 4, 1, 0]) + bytes([0x5A] * 28)], "FAIL"),
+    ("decode", [CLIENT + FIELD16 + FIELD28], ACCEPTED),
     ("decode", [CLIENT + FIELD28 + FIELD16], "FAIL"),
     ("decode", [SERVER + bytes([0, 0, 0, 1])], "FAIL"),
+    ("decode", [SERVER + FIELD28], ACCEPTED),
     ("decode", [SERVER + FIELD28 + bytes(4)], "FAIL"),
+    ("decode", [CLIENT + FIELD28], ACCEPTED),
     ("decode", [bytes([0x1B]) + CLIENT[1:] + FIELD28], "FAIL"),
+    ("decode", [SERVER + MAC20], ACCEPTED),
     ("decode", [SERVER + MAC20 + bytes([0])], "FAIL"),
 ]
 
@@ -862,6 +892,40 @@ def random_packet(rng, nfields=None, version=None):
 def field_raw(t, length, body):
     """A field's octets with any Length field, valid or not."""
     return be_bytes(2, t) + be_bytes(2, length) + body
+
+
+# Autokey fields whose Value Length runs past the field: CVE-2014-9750
+# came from following that length. The reader does not read it, so each
+# such field must come back by its own Length, its octets unchanged.
+AUTOKEY_LABEL = "an Autokey field whose Value Length runs past it (CVE-2014-9750)"
+
+
+def autokey_field(code, response, length, value_length):
+    """An Autokey field laid out as RFC 5906 Figure 7: the R and E bits
+    and the Code, the Field Type (the Autokey version, 2), the Length,
+    the Association ID, the Timestamp, the Filestamp, the Value Length,
+    then length - 20 octets of Value and the rest."""
+    return (bytes([0x80 * response + code, 2]) + be_bytes(2, length) + be_bytes(4, 0x1234)
+            + bytes(4) + bytes(4) + be_bytes(4, value_length) + bytes(range(0x41, 0x41 + length - 20)))
+
+
+def autokey_cases():
+    """(octets, the answer Spec.decode_iff fixes for them) for each
+    Autokey case."""
+    out = []
+    for hb, h in ((CLIENT, CLIENT_HEADER), (SERVER, SERVER_HEADER)):
+        for code in (1, 2, 3):
+            for length in (28, 32, 64):
+                for value_length in (length - 19, 0x10000, 0x80000000, 0xFFFFFFFF):
+                    f = autokey_field(code, hb is SERVER, length, value_length)
+                    e = (be(f[:2]), f[4:])
+                    for pre, post, mac in (((), (), b""), ((), (), MAC20),
+                                           (((0x0104, FIELD16[4:]),), (), MAC20 + b"\1\2\3\4"),
+                                           ((), ((0x0104, FIELD28[4:]),), b"")):
+                        fields = pre + (e,) + post
+                        b = hb + b"".join(ext_bytes(x) for x in fields) + mac
+                        out.append((b, stated(h, fields, mac)))
+    return out
 
 
 def broken_packet(rng):
@@ -1098,6 +1162,8 @@ def decode_inputs(rng, count):
                 n = left + over if over else 65532
                 yield ("a field Length running 4 or 1000 octets past the end, or to 65532", "decode",
                        [CLIENT + before + field_raw(0x0104, n, rng.randbytes(left - 4))])
+    for b, _ in autokey_cases():
+        yield (AUTOKEY_LABEL, "decode", [b])
     # Truncations of valid packets at every length.
     for name, b in shapes:
         for n in range(len(b)):
@@ -1828,6 +1894,8 @@ def main():
         accepted_shapes = collections.Counter()
         differ_model = 0
         spec_right = spec_total = 0
+        autokey_stated = dict(autokey_cases())
+        autokey_right = 0
         read_agrees = read_total = 0
         decoded = {}  # octets -> the tool's answer, parsed
         for i, ((label, op, a), (want, why), got) in enumerate(zip(items, wants, tool)):
@@ -1849,11 +1917,17 @@ def main():
                     decoded.setdefault(b, parse_decoded(got))
                 except ValueError:
                     decoded.setdefault(b, ("unreadable", got[:200]))
+            if label == AUTOKEY_LABEL:
+                if got == want == autokey_stated[a[0]]:
+                    autokey_right += 1
+                else:
+                    failures.append((f"the Autokey field in {short(hexd(a[0]), 120)}", autokey_stated[a[0]],
+                                     f"model {want}; tool {got}"))
             if label == "Spec.lean's examples and rejects":
                 spec_total += 1
                 stated_answer = next(w for o, x, w in SPEC_CASES if o == op and x == a)
-                spec_right += want == stated_answer
-                if want != stated_answer:
+                spec_right += as_stated(want, stated_answer)
+                if not as_stated(want, stated_answer):
                     failures.append((f"the model on {short(request(op, a), 120)}", stated_answer, want))
             if got != want:
                 differ_model += 1
@@ -1996,6 +2070,9 @@ def main():
         f"{spec_right} of {spec_total}",
         f"- The model's two readings of each `decode` input, by `Valid` and `packetBytes` and by SPEC.md's "
         f"one-pass rule, the same: {read_agrees} of {read_total}",
+        f"- Autokey fields (RFC 5906 Figure 7) whose Value Length runs past the field, as in CVE-2014-9750, "
+        f"read by their own Length with their octets unchanged, by the tool and the model: {autokey_right} "
+        f"of {by_label[AUTOKEY_LABEL + ' (decode)']}",
         f"- Packets: {by_op['decode']}, of which the model reads {accepted}; why it refuses the others: "
         + (tally(refused) or "none"),
         "- Packets the model reads, by version, number of extension fields and MAC: "

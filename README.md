@@ -11,7 +11,7 @@ This library reads and writes one NTP packet, the whole of one UDP payload, in L
 Machine-checked proofs show:
 
 - **The reader accepts exactly the packets of the specification, and gives back what they hold.** It accepts a payload exactly when it is the octets of a packet that `Spec/Defs.lean` writes down from RFC 5905 and RFC 7822, and gives that packet. So it reads each payload one way only.
-- **Lengths in the packet are checked.** A payload shorter than the header is refused, and so is an extension field whose Length runs past the end of the packet, wherever it is. So are versions other than 3 and 4, and modes 0, 6 and 7.
+- **The header length and each extension field's Length are checked.** A payload shorter than the header is refused, and so is an extension field whose Length runs past the end of the packet, wherever it starts with more than 24 octets left (24 or fewer octets left are read as the MAC). So are versions other than 3 and 4, and modes 0, 6 and 7.
 - **Writing and reading agree.** The writer writes each valid packet as the RFCs lay it out, and reading what it wrote gives the packet back.
 - **Timestamp conversion is exact.** A timestamp in a given era converts to the exact Unix time, and back. The timestamp 0, which means unknown, converts to nothing in every era, never to 1900.
 
@@ -45,13 +45,13 @@ The statements are in `Spec.lean`. The definitions they use are in `Spec/Defs.le
 | A payload shorter than the 48-octet header is refused. | `Spec.decode_short` |
 | A packet whose version is not 3 or 4 is refused. | `Spec.decode_version` |
 | A packet of mode 0, 6 or 7 is refused. | `Spec.decode_mode` |
-| An extension field whose Length runs past the end of the packet is refused, wherever it is and whatever the rest of the packet holds. | `Spec.decode_ext_overrun` |
+| An extension field whose Length runs past the end of the packet is refused, wherever it starts with more than 24 octets left (24 or fewer are read as the MAC), and whatever the rest of the packet holds. | `Spec.decode_ext_overrun` |
 | The timestamp 0 converts to no Unix time, in any era. | `Spec.toUnix_zero` |
 | A timestamp in an era converts to exactly its Unix time: `era * 2^32` plus its seconds and fraction, less 2,208,988,800 seconds. | `Spec.toUnix_spec` |
 | Converting a timestamp to Unix time and back gives it back, and so does converting a Unix time to a timestamp and back. | `Spec.fromUnix_toUnix`, `Spec.toUnix_fromUnix` |
-| A client request and a server reply captured on a network, read field by field; a captured reply with two extension fields; packets with a MAC, a crypto-NAK, and version 3; the end of era 0 in 2036, worked by hand. Fourteen packets that each break one rule are refused. | `Spec.examples`, `Spec.rejects` |
+| A client request and a server reply captured on a network, read field by field; a captured reply with two extension fields; packets with a MAC, a crypto-NAK, and version 3; an Autokey field whose Value Length runs past the field, given back as it is; the end of era 0 in 2036, worked by hand. Fourteen packets that each break one rule are refused, each after a packet that differs from it only there and is accepted. | `Spec.examples`, `Spec.rejects` |
 
-The packets this reader accepts are those of version 3 or 4 and mode 1 to 5, whose extension fields each have a Length that is a multiple of 4 from 16 to 65532, whose MAC is none, 20 or 24 octets, or four zero octets (the crypto-NAK) with no extension field, whose last extension field is at least 28 octets when there is no MAC, and which, in version 3, have no extension field. `SPEC.md` gives the RFC text for each rule, and says where chrony and ntpd choose differently.
+The packets this reader accepts are those of version 3 or 4 and mode 1 to 5, whose extension fields each have a Length that is a multiple of 4 from 16 to 65532, whose MAC is none, 20 or 24 octets, or four zero octets (the crypto-NAK) with no extension field, whose last extension field is at least 28 octets when there is no MAC, and which, in version 3, have no extension field. `SPEC.md` gives the RFC text for each rule, says which rules are this reader's own choice where the RFCs leave one open, such as what may follow the header of a version 3 packet, and says where chrony, ntpd, ntpd-rs, NTPsec and Wireshark choose differently.
 
 ## What is not proved
 

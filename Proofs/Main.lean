@@ -129,6 +129,9 @@ theorem examples :
       some { header := { clientHeader with version := 3 }, exts := [], mac := mac20 } ∧
     Ntp.decode (clientRequest ++ tail24) =
       some { header := clientHeader, exts := [], mac := tail24 } ∧
+    Ntp.decode (clientRequest ++ autokeyAssoc ++ mac20) =
+      some { header := clientHeader, exts := [{ type := 0x0102, body := autokeyAssoc.drop 4 }],
+             mac := mac20 } ∧
     Ntp.encode { header := serverHeader, exts := [], mac := [] } = serverReply ∧
     Ntp.toUnix 0 0xE5F663A8798EAE2B = some (1649141032, 0x798EAE2B) ∧
     Ntp.fromUnix 1649141032 0x798EAE2B = some (0, 0xE5F663A8798EAE2B) ∧
@@ -143,20 +146,29 @@ theorem examples :
   decide +kernel
 
 theorem rejects :
+    (Ntp.decode serverReply).isSome ∧
     Ntp.decode (0x14 :: serverReply.tail) = none ∧
     Ntp.decode (0x2C :: serverReply.tail) = none ∧
     Ntp.decode (0x20 :: serverReply.tail) = none ∧
     Ntp.decode (0x26 :: serverReply.tail) = none ∧
     Ntp.decode (0x27 :: serverReply.tail) = none ∧
     Ntp.decode (serverReply.take 47) = none ∧
+    (Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x10] ++ List.replicate 12 0x5A ++
+      field28)).isSome ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x0C] ++ List.replicate 8 0x5A ++ field28) =
       none ∧
+    (Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x20] ++ List.replicate 28 0x5A)).isSome ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x1E] ++ List.replicate 26 0x5A) = none ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x01, 0x00] ++ List.replicate 28 0x5A) = none ∧
+    (Ntp.decode (clientRequest ++ field16 ++ field28)).isSome ∧
     Ntp.decode (clientRequest ++ field28 ++ field16) = none ∧
+    (Ntp.decode cryptoNak).isSome ∧
     Ntp.decode (serverReply ++ [0x00, 0x00, 0x00, 0x01]) = none ∧
+    (Ntp.decode (serverReply ++ field28)).isSome ∧
     Ntp.decode (serverReply ++ field28 ++ [0, 0, 0, 0]) = none ∧
+    (Ntp.decode (clientRequest ++ field28)).isSome ∧
     Ntp.decode ((0x1B :: clientRequest.tail) ++ field28) = none ∧
+    (Ntp.decode (serverReply ++ mac20)).isSome ∧
     Ntp.decode (serverReply ++ mac20 ++ [0x00]) = none := by
   decide +kernel
 

@@ -40,8 +40,9 @@ theorem encode_decode (b : List UInt8) (p : Packet) (h : Ntp.decode b = some p) 
 theorem decode_short (b : List UInt8) (h : b.length < 48) : Ntp.decode b = none := by
   sorry
 
-/-- A packet whose version, bits 3 to 5 of the first octet, is not 3 or
-    4 is refused, whatever follows. -/
+/-- A packet whose version (VN, the three bits after the two of LI at
+    the start of the first octet: `x / 8 % 8`) is not 3 or 4 is refused,
+    whatever follows. -/
 theorem decode_version (x : UInt8) (b : List UInt8)
     (h : x.toNat / 8 % 8 ≠ 3 ∧ x.toNat / 8 % 8 ≠ 4) : Ntp.decode (x :: b) = none := by
   sorry
@@ -107,6 +108,9 @@ theorem toUnix_fromUnix (s : Int) (f : Nat) (era : Int) (raw : Nat)
     - a crypto-NAK, and a version 3 packet with a MAC;
     - 24 octets after the header that begin like a field of Length 24:
       they are the MAC;
+    - an Autokey field whose Value Length, 0xFFFFFFFF, runs far past the
+      field, as in CVE-2014-9750, then a MAC: the field is read by its
+      own Length, and its octets come back as they are;
     - the transmit timestamp of the reply, 2022-04-05 06:43:52 UTC, and
       the Unix epoch;
     - the end of era 0 in 2036: the last whole second of era 0, then the
@@ -132,6 +136,9 @@ theorem examples :
       some { header := { clientHeader with version := 3 }, exts := [], mac := mac20 } ∧
     Ntp.decode (clientRequest ++ tail24) =
       some { header := clientHeader, exts := [], mac := tail24 } ∧
+    Ntp.decode (clientRequest ++ autokeyAssoc ++ mac20) =
+      some { header := clientHeader, exts := [{ type := 0x0102, body := autokeyAssoc.drop 4 }],
+             mac := mac20 } ∧
     Ntp.encode { header := serverHeader, exts := [], mac := [] } = serverReply ∧
     Ntp.toUnix 0 0xE5F663A8798EAE2B = some (1649141032, 0x798EAE2B) ∧
     Ntp.fromUnix 1649141032 0x798EAE2B = some (0, 0xE5F663A8798EAE2B) ∧
@@ -145,36 +152,51 @@ theorem examples :
     Ntp.toUnix (-1) 0xFFFFFFFF00000000 = some (-2208988801, 0) := by
   sorry
 
-/-- Packets that each break one rule, and that a reader without that rule
-    accepts:
-    - versions 2 and 5, and modes 0, 6 and 7, in the server reply;
+/-- Packets that each break one rule, each after a packet that differs
+    from it only there and is accepted:
+    - versions 2 and 5, and modes 0, 6 and 7, in the server reply, which
+      is accepted;
     - the server reply cut to 47 octets;
     - a version 4 field of Length 12 (less than the 16 of RFC 7822),
-      followed by a field of 28;
-    - a field of Length 30, not a multiple of 4;
-    - a field of Length 256 with 32 octets left (the shape of
-      CVE-2014-9750, a length that runs past what holds it);
+      then a field of 28; accepted with a first field of Length 16;
+    - a last field of Length 30, not a multiple of 4; accepted with
+      Length 32;
+    - a field of Length 256 with 32 octets left, a Length that runs past
+      the end of the packet (CVE-2014-9750's flaw, at the level of the
+      field's own Length); accepted with Length 32;
     - without a MAC, a last field of 16 octets after one of 28 (RFC 7822
-      7.5.1.4 asks for 28);
-    - four octets after the header that are not zero;
+      7.5.1.4 asks for 28); accepted the other way round;
+    - four octets after the header that are not zero; accepted as four
+      zero octets, the crypto-NAK;
     - a field, then four zero octets: the crypto-NAK has no fields;
-    - a version 3 packet with a field of 28 octets;
-    - 21 octets after the header. -/
+      accepted without the four octets;
+    - a version 3 packet with a field of 28 octets; accepted in version
+      4;
+    - 21 octets after the header; accepted as the 20-octet MAC. -/
 theorem rejects :
+    (Ntp.decode serverReply).isSome ∧
     Ntp.decode (0x14 :: serverReply.tail) = none ∧
     Ntp.decode (0x2C :: serverReply.tail) = none ∧
     Ntp.decode (0x20 :: serverReply.tail) = none ∧
     Ntp.decode (0x26 :: serverReply.tail) = none ∧
     Ntp.decode (0x27 :: serverReply.tail) = none ∧
     Ntp.decode (serverReply.take 47) = none ∧
+    (Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x10] ++ List.replicate 12 0x5A ++
+      field28)).isSome ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x0C] ++ List.replicate 8 0x5A ++ field28) =
       none ∧
+    (Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x20] ++ List.replicate 28 0x5A)).isSome ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x00, 0x1E] ++ List.replicate 26 0x5A) = none ∧
     Ntp.decode (clientRequest ++ [0x01, 0x04, 0x01, 0x00] ++ List.replicate 28 0x5A) = none ∧
+    (Ntp.decode (clientRequest ++ field16 ++ field28)).isSome ∧
     Ntp.decode (clientRequest ++ field28 ++ field16) = none ∧
+    (Ntp.decode cryptoNak).isSome ∧
     Ntp.decode (serverReply ++ [0x00, 0x00, 0x00, 0x01]) = none ∧
+    (Ntp.decode (serverReply ++ field28)).isSome ∧
     Ntp.decode (serverReply ++ field28 ++ [0, 0, 0, 0]) = none ∧
+    (Ntp.decode (clientRequest ++ field28)).isSome ∧
     Ntp.decode ((0x1B :: clientRequest.tail) ++ field28) = none ∧
+    (Ntp.decode (serverReply ++ mac20)).isSome ∧
     Ntp.decode (serverReply ++ mac20 ++ [0x00]) = none := by
   sorry
 

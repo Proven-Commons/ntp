@@ -6,8 +6,8 @@
   and timestamps (5905 section 6).
 
   Bytes are `List UInt8`, one UDP payload. Every multi-octet field is
-  big-endian ("network byte order", RFC 5906 section 10). This file
-  uses nothing from the code.
+  big-endian: the packet is "32-bit (4 octet) words in network byte
+  order" (RFC 5905 7.3). This file uses nothing from the code.
 -/
 
 namespace Spec
@@ -71,8 +71,9 @@ def headerBytes (h : Header) : List UInt8 :=
 
 /-- The headers this reader accepts:
     - every field small enough for its bits;
-    - version 3 or 4 (VN is "currently 4"; version 3 is RFC 1305, with
-      which the header is "backwards compatible", 5905 section 7.3);
+    - version 3 or 4 (VN is "currently 4", and the header "fields are
+      backwards compatible with NTPv3", 5905 section 7.3; NTPv3 is RFC
+      1305);
     - mode 1 to 5. Mode 0 is "reserved", mode 6 is "NTP control
       message" and mode 7 is "reserved for private use" (Figure 10):
       their packets are not this format. -/
@@ -138,7 +139,13 @@ def packetBytes (p : Packet) : List UInt8 :=
       packet;
     - the crypto-NAK, "a MAC consisting of four octets of zeros" (5905
       section 9.2), "the key identifier with value zero" (5905 A.5), in a
-      packet with no extension field. -/
+      packet with no extension field.
+
+    These are the MACs of NTPv4, and this reader takes the same ones in
+    version 3. That is its choice: RFC 1305, NTPv3, gives a 96-bit
+    authenticator, a 32-bit key identifier and a 64-bit DES checksum (12
+    octets), which this reader refuses. `SPEC.md` gives what other
+    readers take. -/
 def MacValid (exts : List ExtField) (mac : List UInt8) : Prop :=
   mac = [] ∨ mac.length = 20 ∨ mac.length = 24 ∨ (mac = [0, 0, 0, 0] ∧ exts = [])
 
@@ -147,8 +154,10 @@ def MacValid (exts : List ExtField) (mac : List UInt8) : Prop :=
     - each extension field is valid;
     - a version 3 packet has no extension fields: "In NTPv4, one or more
       extension fields can be inserted after the header and before the
-      MAC, if a MAC is present" (7822 section 3), and RFC 1305 has a
-      header and an optional authenticator only;
+      MAC, if a MAC is present" (7822 section 3). This is this reader's
+      choice, where readers differ: RFC 1305 lets other data go before
+      the key identifier of its authenticator, and ntpd walks a version
+      3 tail of more than 24 octets as extension fields;
     - the MAC is one of `MacValid`;
     - without a MAC, the last extension field is at least 28 octets:
       "If the packet includes a single extension field, the length of
