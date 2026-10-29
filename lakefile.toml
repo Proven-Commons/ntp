@@ -1,5 +1,6 @@
 name = "ntp"
 version = "0.1.0"
+license = "Apache-2.0"
 defaultTargets = ["Ntp", "Spec", "Proofs", "ntp"]
 
 [[lean_lib]]
