@@ -6,7 +6,9 @@ import Spec.Defs
   The first three packets were captured on a network by the ntpd-rs
   project, which keeps them as test vectors in
   `ntp-proto/src/packet/mod.rs` (`test_captured_client`,
-  `test_captured_server`, `test_nts_captured_server`). The others are
+  `test_captured_server`, `test_nts_captured_server`). ntpd-rs is
+  released under the Apache License 2.0 or the MIT license, at the
+  user's choice; these byte strings keep that notice. The others are
   written by hand from them.
 -/
 
