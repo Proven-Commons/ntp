@@ -30,7 +30,7 @@
       Padding (`-` when empty), separated by commas;
     - the hex of the MAC, or `-` when there is none.
   `decode` prints a packet this way, and `encode` reads one. By
-  `Spec.decode_encode`, `encode` prints OK exactly when the packet it
+  `Ntp.Spec.decode_encode`, `encode` prints OK exactly when the packet it
   is given is valid.
 
   A malformed request prints `error`: an unknown operation, the wrong
@@ -45,7 +45,7 @@
 
 import Ntp
 
-open Ntp Spec
+open Ntp Ntp.Spec
 
 def hexValue (c : Char) : Option Nat :=
   if '0' ≤ c ∧ c ≤ '9' then some (c.toNat - '0'.toNat)

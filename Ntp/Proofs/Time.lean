@@ -6,7 +6,7 @@ import Ntp
 
 namespace NtpProofs
 
-open Spec Ntp
+open Ntp.Spec Ntp
 
 theorem toUnix_zero (era : Int) : toUnix era 0 = none := by
   simp [toUnix]

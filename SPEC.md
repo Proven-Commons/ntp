@@ -10,11 +10,11 @@ It also converts a 64-bit timestamp to Unix time and back, given the era, which 
 
 It does not check a MAC, read what an extension field holds, or run any part of the protocol: no clock filter, peer selection or clock discipline, no Autokey (RFC 5906) and no Network Time Security (RFC 8915). "Not in this slice" below lists what else it leaves out.
 
-A reviewer who did not write this specification approves it. The approval also covers `Spec.lean`, `Spec/Defs.lean`, `Spec/Examples.lean`, and the other files that `bar.toml` lists.
+A reviewer who did not write this specification approves it. The approval also covers `Ntp/Spec.lean`, `Ntp/Spec/Defs.lean`, `Ntp/Spec/Examples.lean`, and the other files that `bar.toml` lists.
 
 ## The header
 
-`Spec.Header` has the fields of Figure 8, in its order, and `Spec.headerBytes` writes them as their 48 octets, every multi-octet field big-endian:
+`Ntp.Spec.Header` has the fields of Figure 8, in its order, and `Ntp.Spec.headerBytes` writes them as their 48 octets, every multi-octet field big-endian:
 
 | Octets | Field | Kept as |
 |---|---|---|
@@ -34,7 +34,7 @@ A reviewer who did not write this specification approves it. The approval also c
 
 Poll and Precision are two's complement. The short format is 16 bits of seconds and 16 of fraction, and the timestamp format 32 bits of seconds and 32 of fraction (section 6); this library keeps each as the number its bits hold and does not divide it.
 
-`Spec.HeaderValid` says which headers this reader accepts:
+`Ntp.Spec.HeaderValid` says which headers this reader accepts:
 
 - every field fits in its bits;
 - the version is 3 or 4. VN is "currently 4", and the header "fields are backwards compatible with NTPv3" (RFC 5905 7.3); NTPv3 is RFC 1305. Versions 1 and 2 are refused, and so are 0, 5, 6 and 7;
@@ -46,7 +46,7 @@ Any leap indicator, stratum, poll and precision is accepted, including stratum 0
 
 After the header come "optional extension fields and finally an optional message authentication code (MAC) consisting of the Key Identifier field and Message Digest field" (RFC 5905 7.3).
 
-**Extension fields.** `Spec.ExtField` is a field of Figure 14: its 16-bit Field Type, then its Value and its Padding, kept together, since where the Value ends is "specific to the defined function". `Spec.extBytes` writes it as the Field Type, the Length, then those octets. The Length "indicates the length of the entire extension field in octets, including the Padding field", so it counts the four octets of Field Type and Length too. `Spec.ExtValid` says which fields this reader accepts, from RFC 7822 section 3:
+**Extension fields.** `Ntp.Spec.ExtField` is a field of Figure 14: its 16-bit Field Type, then its Value and its Padding, kept together, since where the Value ends is "specific to the defined function". `Ntp.Spec.extBytes` writes it as the Field Type, the Length, then those octets. The Length "indicates the length of the entire extension field in octets, including the Padding field", so it counts the four octets of Field Type and Length too. `Ntp.Spec.ExtValid` says which fields this reader accepts, from RFC 7822 section 3:
 
 - the Length is a multiple of 4: "All extension fields are zero-padded to a word (four octets) boundary";
 - the Length is at least 16: "the minimum field length containing required fields is four words (16 octets)";
@@ -54,7 +54,7 @@ After the header come "optional extension fields and finally an optional message
 
 Any Field Type is accepted, and the Value and Padding are given as they are. RFC 7822 says a host "SHOULD ignore" a field of unknown type; which types to act on is for the program using this library. The Padding is not checked to be zero, since this library cannot tell where it starts.
 
-**The MAC.** `Spec.MacValid` says which MACs this reader accepts:
+**The MAC.** `Ntp.Spec.MacValid` says which MACs this reader accepts:
 
 - none;
 - 20 or 24 octets: the 32-bit Key Identifier, then a 128-bit digest (RFC 5905 7.3) or a 160-bit one. "This field can be either 24 octets long, 20 octets long, or a 4-octet crypto-NAK" (RFC 7822 section 1), and "A MAC MUST NOT be longer than 24 octets if there is no extension field present, unless a longer MAC is agreed upon by both client and server" (7.5.1.3);
@@ -62,13 +62,13 @@ Any Field Type is accepted, and the Value and Padding are given as they are. RFC
 
 These are the MACs of NTPv4. This reader takes the same ones in version 3, which is its own choice: RFC 1305 gives version 3 a 12-octet authenticator, which this reader refuses (see "Choices where readers differ").
 
-**`Spec.Valid`** says which packets this reader accepts:
+**`Ntp.Spec.Valid`** says which packets this reader accepts:
 
 - the header is valid, each extension field is valid, and the MAC is one of the above;
 - a version 3 packet has no extension fields. RFC 7822 starts its section 7.5 with "In NTPv4, one or more extension fields can be inserted after the header and before the MAC". This too is this reader's choice, where readers differ (see "Choices where readers differ");
 - without a MAC, the last extension field is at least 28 octets: "If the packet includes a single extension field, the length of the extension field MUST be at least 7 words, i.e., at least 28 octets. If the packet includes more than one extension field, the length of the last extension field MUST be at least 28 octets. The length of the other extension fields in this case MUST be at least 16 octets each" (7.5.1.4).
 
-`Spec.packetBytes` writes a packet as its header, its extension fields in order, then its MAC.
+`Ntp.Spec.packetBytes` writes a packet as its header, its extension fields in order, then its MAC.
 
 ### Reading the octets after the header
 
@@ -78,7 +78,7 @@ The rules above are the ones that let a receiver tell the last extension field f
 2. In version 3, no octets, or 20 or 24 octets, are the MAC. Anything else is refused.
 3. In version 4, while more than 24 octets are left, a field starts there: a Field Type, then a Length that must be a multiple of 4, at least 16, and no more than the octets left. When 24 or fewer octets are left, they must be none, or 20 or 24, the MAC. Anything else is refused.
 
-This accepts exactly the valid packets, and reads each one way only. With a MAC of 20 or 24 octets, every field leaves more than 24 octets before it is read, so each is read as a field, and then the MAC is what is left. Without a MAC, the last field is all that is left when it is read, so it is more than 24 octets, a multiple of 4, and so at least 28. A field can never be read as part of the MAC, nor the MAC as a field. `Spec.decode_iff` proves that the reader accepts exactly the octets `Spec.packetBytes` writes for a valid packet.
+This accepts exactly the valid packets, and reads each one way only. With a MAC of 20 or 24 octets, every field leaves more than 24 octets before it is read, so each is read as a field, and then the MAC is what is left. Without a MAC, the last field is all that is left when it is read, so it is more than 24 octets, a multiple of 4, and so at least 28. A field can never be read as part of the MAC, nor the MAC as a field. `Ntp.Spec.decode_iff` proves that the reader accepts exactly the octets `Ntp.Spec.packetBytes` writes for a valid packet.
 
 So 24 or fewer octets after the header are never an extension field. In particular, 24 octets that begin like a field of Length 24 are a MAC. A sender that put that field in a packet without a MAC broke 7.5.1.4, and this reader reads it as the MAC.
 
@@ -93,7 +93,7 @@ The rules above are this reader's. Other readers of the packet choose differentl
   - ntpd-rs takes any 4 to 24 octets as the MAC;
   - NTPsec reads version 3 as version 4, extension fields too.
 - **MAC lengths in version 4.** After the extension fields, this reader takes none, 20 or 24 octets as the MAC, following RFC 7822 (sections 1 and 7.5.1.3, and 7.5.1.4, which makes a last field without a MAC at least 28 octets). So does chrony: it takes 20 to 24 octets, but first refuses a packet whose length is not a multiple of 4. A MAC longer than 24 octets is refused, unless its octets happen to read as fields and a MAC; a length agreed by other means is not in the packet, so this reader cannot use it. The other readers:
-  - ntpd takes any 4 to 24 octets left after the fields, in steps of 4, as the MAC (`MIN_MAC_LEN` is one word and `MAX_MAC_LEN` six): 8, 12 (DES) and 16 octets too, and 4 octets after a field. Such a MAC then fails to authenticate without a matching key, but the packet is not dropped as malformed. So ntpd reads a field of 28 octets and 16 octets after it as a field and a MAC, where this reader refuses them (`Spec.rejects`);
+  - ntpd takes any 4 to 24 octets left after the fields, in steps of 4, as the MAC (`MIN_MAC_LEN` is one word and `MAX_MAC_LEN` six): 8, 12 (DES) and 16 octets too, and 4 octets after a field. Such a MAC then fails to authenticate without a matching key, but the packet is not dropped as malformed. So ntpd reads a field of 28 octets and 16 octets after it as a field and a MAC, where this reader refuses them (`Ntp.Spec.rejects`);
   - ntpd-rs takes any 4 to 24 octets as the MAC, whatever they hold, 21 to 23 too;
   - NTPsec takes 4, 20 or 24 octets as the MAC (any 4 octets as a crypto-NAK, after fields too), refuses the packet with 8, 12 or 16, and with any other number of octets left reads the packet and passes over those octets without a word;
   - Wireshark takes as the MAC whatever its own split leaves (below).
@@ -115,27 +115,27 @@ Neither NTP timestamps nor Unix time count leap seconds, so the offset between t
 
 ## What must always hold
 
-Each property is a theorem in `Spec.lean`, under the name given.
+Each property is a theorem in `Ntp/Spec.lean`, under the name given.
 
 | Property | Theorem |
 |----------|---------|
-| The decoder accepts exactly the octets of a valid packet, and gives that packet: its header fields, its extension fields and its MAC. So it reads each accepted payload one way only. | `Spec.decode_iff` |
-| The encoder writes every valid packet as `Spec.packetBytes` lays it out. | `Spec.encode_eq` |
-| Encoding a packet and decoding the octets gives the packet back exactly when it is valid. | `Spec.decode_encode` |
-| Encoding a decoded packet gives back the octets it was read from. | `Spec.encode_decode` |
-| A payload shorter than 48 octets is refused. | `Spec.decode_short` |
-| A packet of a version other than 3 or 4 is refused. | `Spec.decode_version` |
-| A packet of mode 0, 6 or 7 is refused. | `Spec.decode_mode` |
-| An extension field whose Length runs past the end of the packet is refused, wherever it starts with more than 24 octets left, and whatever the rest of the packet holds. (24 or fewer octets left are never a field: they are read as the MAC, or refused.) | `Spec.decode_ext_overrun` |
-| The timestamp 0 has no Unix time, in any era. | `Spec.toUnix_zero` |
-| The Unix time of a timestamp in an era is exactly `era * 2^32 + raw / 2^32 - 2208988800` seconds, given as whole seconds and a fraction in units of 2^-32 seconds. | `Spec.toUnix_spec` |
-| Converting a timestamp to Unix time and back gives the era and the timestamp back, and converting a Unix time to a timestamp and back gives the Unix time back. | `Spec.fromUnix_toUnix`, `Spec.toUnix_fromUnix` |
-| Examples: a client request and a server reply captured on a network, read field by field; a captured Network Time Security reply with two extension fields; packets with two fields and a MAC, a crypto-NAK, a version 3 packet with a MAC, and 24 octets read as a MAC; an Autokey field whose Value Length runs past the field, read by its own Length and given back as it is; the Unix time of a captured timestamp; the end of era 0 in 2036 and the end of era -1 in 1899. | `Spec.examples` |
-| Fourteen packets that each break one rule are refused, and each comes after a packet that differs from it only there and is accepted: versions 2 and 5; modes 0, 6 and 7; 47 octets; a field of Length 12; a Length not a multiple of 4; a Length past the end; a last field of 16 octets without a MAC; four octets after the header that are not zero; a field followed by a crypto-NAK; a field in a version 3 packet; 21 octets after the header. | `Spec.rejects` |
+| The decoder accepts exactly the octets of a valid packet, and gives that packet: its header fields, its extension fields and its MAC. So it reads each accepted payload one way only. | `Ntp.Spec.decode_iff` |
+| The encoder writes every valid packet as `Ntp.Spec.packetBytes` lays it out. | `Ntp.Spec.encode_eq` |
+| Encoding a packet and decoding the octets gives the packet back exactly when it is valid. | `Ntp.Spec.decode_encode` |
+| Encoding a decoded packet gives back the octets it was read from. | `Ntp.Spec.encode_decode` |
+| A payload shorter than 48 octets is refused. | `Ntp.Spec.decode_short` |
+| A packet of a version other than 3 or 4 is refused. | `Ntp.Spec.decode_version` |
+| A packet of mode 0, 6 or 7 is refused. | `Ntp.Spec.decode_mode` |
+| An extension field whose Length runs past the end of the packet is refused, wherever it starts with more than 24 octets left, and whatever the rest of the packet holds. (24 or fewer octets left are never a field: they are read as the MAC, or refused.) | `Ntp.Spec.decode_ext_overrun` |
+| The timestamp 0 has no Unix time, in any era. | `Ntp.Spec.toUnix_zero` |
+| The Unix time of a timestamp in an era is exactly `era * 2^32 + raw / 2^32 - 2208988800` seconds, given as whole seconds and a fraction in units of 2^-32 seconds. | `Ntp.Spec.toUnix_spec` |
+| Converting a timestamp to Unix time and back gives the era and the timestamp back, and converting a Unix time to a timestamp and back gives the Unix time back. | `Ntp.Spec.fromUnix_toUnix`, `Ntp.Spec.toUnix_fromUnix` |
+| Examples: a client request and a server reply captured on a network, read field by field; a captured Network Time Security reply with two extension fields; packets with two fields and a MAC, a crypto-NAK, a version 3 packet with a MAC, and 24 octets read as a MAC; an Autokey field whose Value Length runs past the field, read by its own Length and given back as it is; the Unix time of a captured timestamp; the end of era 0 in 2036 and the end of era -1 in 1899. | `Ntp.Spec.examples` |
+| Fourteen packets that each break one rule are refused, and each comes after a packet that differs from it only there and is accepted: versions 2 and 5; modes 0, 6 and 7; 47 octets; a field of Length 12; a Length not a multiple of 4; a Length past the end; a last field of 16 octets without a MAC; four octets after the header that are not zero; a field followed by a crypto-NAK; a field in a version 3 packet; 21 octets after the header. | `Ntp.Spec.rejects` |
 
-`Spec.decode_short`, `Spec.decode_version`, `Spec.decode_mode` and `Spec.decode_ext_overrun` say what is refused, and a decoder that refuses everything meets them. `Spec.decode_iff`, `Spec.examples` and the accepted packets of `Spec.rejects` rule that decoder out. `tests/plant_bugs.py` plants a reader without each rule that `Spec.rejects` breaks, and the tests catch each one (`tests/PLANTED-BUGS.md`). The same holds for `Spec.toUnix_zero`, which `Spec.toUnix_spec` pairs, and for `Spec.toUnix_fromUnix`, which `Spec.fromUnix_toUnix` pairs. Since `Spec.decode_iff` is exact, it fixes what the decoder gives for every input; `Spec.toUnix_spec` does the same for `Ntp.toUnix`, and the two round trips together for `Ntp.fromUnix`.
+`Ntp.Spec.decode_short`, `Ntp.Spec.decode_version`, `Ntp.Spec.decode_mode` and `Ntp.Spec.decode_ext_overrun` say what is refused, and a decoder that refuses everything meets them. `Ntp.Spec.decode_iff`, `Ntp.Spec.examples` and the accepted packets of `Ntp.Spec.rejects` rule that decoder out. `tests/plant_bugs.py` plants a reader without each rule that `Ntp.Spec.rejects` breaks, and the tests catch each one (`tests/PLANTED-BUGS.md`). The same holds for `Ntp.Spec.toUnix_zero`, which `Ntp.Spec.toUnix_spec` pairs, and for `Ntp.Spec.toUnix_fromUnix`, which `Ntp.Spec.fromUnix_toUnix` pairs. Since `Ntp.Spec.decode_iff` is exact, it fixes what the decoder gives for every input; `Ntp.Spec.toUnix_spec` does the same for `Ntp.toUnix`, and the two round trips together for `Ntp.fromUnix`.
 
-**CVE-2014-9750.** ntpd before 4.2.8p1, with Autokey enabled, could leak its memory or crash on "a packet containing an extension field with an invalid value for the length of its value field" (ntp bug 2671: "vallen is not validated"): it followed a length from the packet without checking it against what holds it. That length, the Value Length inside an Autokey field (RFC 5906 Figure 7), is part of the field's octets, which this library gives as they are and does not read. `Spec.examples` reads a packet whose Autokey field of 28 octets has a Value Length of 0xFFFFFFFF: the field is read by its own Length, and its octets come back unchanged. A program that reads the Value Length must check it against the field. The same flaw at the level this library reads would be a field's own Length that runs past the end of the packet, and `Spec.decode_ext_overrun` proves that such a field is refused.
+**CVE-2014-9750.** ntpd before 4.2.8p1, with Autokey enabled, could leak its memory or crash on "a packet containing an extension field with an invalid value for the length of its value field" (ntp bug 2671: "vallen is not validated"): it followed a length from the packet without checking it against what holds it. That length, the Value Length inside an Autokey field (RFC 5906 Figure 7), is part of the field's octets, which this library gives as they are and does not read. `Ntp.Spec.examples` reads a packet whose Autokey field of 28 octets has a Value Length of 0xFFFFFFFF: the field is read by its own Length, and its octets come back unchanged. A program that reads the Value Length must check it against the field. The same flaw at the level this library reads would be a field's own Length that runs past the end of the packet, and `Ntp.Spec.decode_ext_overrun` proves that such a field is refused.
 
 ## Not in this slice
 
@@ -146,7 +146,7 @@ Each property is a theorem in `Spec.lean`, under the name given.
 - **Which era a timestamp is in.** The program using this library gives it.
 - **Leap seconds**, and time zones.
 - **The protocol.** No on-wire exchange, clock filter, selection, clustering or discipline.
-- **Encoding a packet that is not valid.** What `Ntp.encode` writes for one is not specified. `Spec.decode_encode` shows how to tell: decoding what it wrote gives the packet back exactly when it was valid.
+- **Encoding a packet that is not valid.** What `Ntp.encode` writes for one is not specified. `Ntp.Spec.decode_encode` shows how to tell: decoding what it wrote gives the packet back exactly when it was valid.
 
 ## The command-line tool
 

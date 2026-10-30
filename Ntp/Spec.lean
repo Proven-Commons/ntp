@@ -1,17 +1,17 @@
 import Ntp
-import Spec.Defs
-import Spec.Examples
+import Ntp.Spec.Defs
+import Ntp.Spec.Examples
 
 /-!
   The statements a reviewer approves. Each `sorry` is proved under the
-  same name in `Proofs/`, and `lake comparator` checks that each proof
+  same name in `Ntp/Proofs/`, and `lake comparator` checks that each proof
   proves exactly the statement here.
 
-  `Spec/Defs.lean` writes the packet down from RFC 5905 and RFC 7822.
+  `Ntp/Spec/Defs.lean` writes the packet down from RFC 5905 and RFC 7822.
   The code is in `Ntp/`.
 -/
 
-namespace Spec
+namespace Ntp.Spec
 
 /-- The decoder accepts exactly the octets of a valid packet, and gives
     that packet. So each accepted input is read one way only, and every
@@ -200,4 +200,4 @@ theorem rejects :
     Ntp.decode (serverReply ++ mac20 ++ [0x00]) = none := by
   sorry
 
-end Spec
+end Ntp.Spec

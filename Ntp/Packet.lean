@@ -1,15 +1,15 @@
 /-
   Reading and writing the NTP packet: the 48-octet header of RFC 5905,
   then extension fields (RFC 7822) and a MAC. The structures the reader
-  gives back are those of `Spec/Defs.lean`; the functions here are the
+  gives back are those of `Ntp/Spec/Defs.lean`; the functions here are the
   code under proof, and share nothing else with the specification.
 -/
 
-import Spec.Defs
+import Ntp.Spec.Defs
 
 namespace Ntp
 
-open Spec (Header ExtField Packet)
+open Ntp.Spec (Header ExtField Packet)
 
 /-! ## Octets -/
 

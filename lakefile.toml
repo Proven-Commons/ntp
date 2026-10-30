@@ -1,16 +1,18 @@
 name = "ntp"
 version = "0.1.0"
 license = "Apache-2.0"
-defaultTargets = ["Ntp", "Spec", "Proofs", "ntp"]
+defaultTargets = ["Ntp", "NtpSpec", "NtpProofs", "ntp"]
 
 [[lean_lib]]
 name = "Ntp"
 
 [[lean_lib]]
-name = "Spec"
+name = "NtpSpec"
+roots = ["Ntp.Spec"]
 
 [[lean_lib]]
-name = "Proofs"
+name = "NtpProofs"
+roots = ["Ntp.Proofs"]
 
 [[lean_exe]]
 name = "ntp"

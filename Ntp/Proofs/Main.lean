@@ -1,14 +1,14 @@
 /-
-  The statements of `Spec.lean`, each proved from the lemmas in the
-  other files of `Proofs/`. `lake comparator` checks that each theorem
-  here is exactly the one in `Spec.lean`.
+  The statements of `Ntp/Spec.lean`, each proved from the lemmas in the
+  other files of `Ntp/Proofs/`. `lake comparator` checks that each theorem
+  here is exactly the one in `Ntp/Spec.lean`.
 -/
 
-import Proofs.Packet
-import Proofs.Time
-import Spec.Examples
+import Ntp.Proofs.Packet
+import Ntp.Proofs.Time
+import Ntp.Spec.Examples
 
-namespace Spec
+namespace Ntp.Spec
 
 theorem decode_iff (b : List UInt8) (p : Packet) :
     Ntp.decode b = some p ↔ Valid p ∧ b = packetBytes p :=
@@ -172,4 +172,4 @@ theorem rejects :
     Ntp.decode (serverReply ++ mac20 ++ [0x00]) = none := by
   decide +kernel
 
-end Spec
+end Ntp.Spec

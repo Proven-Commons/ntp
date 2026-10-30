@@ -8,19 +8,19 @@ The tool answers `decode`, `encode`, `unix` and `fromunix` requests
 
 1. Against the model, written in Python from RFC 5905 (Figure 8,
    sections 6, 7.3 and 9.2), RFC 7822 (sections 3 and 7.5.1.3 to
-   7.5.1.4) and Spec/Defs.lean, sharing nothing with the Lean code:
-   - `valid` and `packet_bytes` are Spec/Defs.lean's `Valid` and
+   7.5.1.4) and Ntp/Spec/Defs.lean, sharing nothing with the Lean code:
+   - `valid` and `packet_bytes` are Ntp/Spec/Defs.lean's `Valid` and
      `packetBytes`: the header of Figure 8, big-endian; each extension
      field its Field Type, its Length (the whole field) and its Value and
      Padding, of a Length that is a multiple of 4 from 16 to 65532; a MAC
      of none, 20 or 24 octets, or four zero octets (the crypto-NAK) with
      no field; no field in version 3; a last field of at least 28 octets
      when there is no MAC;
-   - `decode_spec` finds the packet that `Spec.decode_iff` says the
+   - `decode_spec` finds the packet that `Ntp.Spec.decode_iff` says the
      decoder must give, from those two alone: for each MAC length that
      `valid` allows, it splits the octets before the MAC into fields by
      their Length fields, and keeps the packets that are valid and whose
-     octets are the input. There is at most one, by `Spec.decode_iff`,
+     octets are the input. There is at most one, by `Ntp.Spec.decode_iff`,
      and the script fails if it finds two;
    - `read` is the one-pass reading SPEC.md describes ("Reading the
      octets after the header"): four zero octets are a crypto-NAK; in
@@ -37,7 +37,7 @@ The tool answers `decode`, `encode`, `unix` and `fromunix` requests
      has no Unix time; nor does a value of 2^64 or more, and a fraction
      of 2^32 or more has no timestamp;
    - the request parsing and the output of the header of Main.lean.
-   The model must give the answers Spec.lean states in `examples` and
+   The model must give the answers Ntp/Spec.lean states in `examples` and
    `rejects`. Every answer of the tool must equal the model's.
 
 2. Against other readers of the packet, on every `decode` input. Each
@@ -88,7 +88,7 @@ The tool answers `decode`, `encode`, `unix` and `fromunix` requests
    which the model gives the vector's answer, as for the oracles.
 
 Inputs come from a recorded seed:
-- the inputs of Spec.lean's `examples` and `rejects`;
+- the inputs of Ntp/Spec.lean's `examples` and `rejects`;
 - every value of the first octet (leap, version and mode) in eight
   packets of every shape; every value of every header octet in the
   server reply; headers from random fields and random octets;
@@ -182,10 +182,10 @@ JOBS = max(1, min(4, os.cpu_count() or 1))
 EXE = None
 
 # ---------------------------------------------------------------------
-# The model: Spec/Defs.lean, from RFC 5905 and RFC 7822.
+# The model: Ntp/Spec/Defs.lean, from RFC 5905 and RFC 7822.
 
 T16, T32, T64 = 1 << 16, 1 << 32, 1 << 64
-# Spec.unixEpoch: RFC 5905 Figure 4, "1 Jan 1970 ... 2,208,988,800 First
+# Ntp.Spec.unixEpoch: RFC 5905 Figure 4, "1 Jan 1970 ... 2,208,988,800 First
 # day UNIX".
 UNIX_EPOCH = 2208988800
 
@@ -199,7 +199,7 @@ def be(bs):
 
 
 def be_bytes(w, n):
-    """Spec.beBytes: n as w octets, most significant first, each
+    """Ntp.Spec.beBytes: n as w octets, most significant first, each
     n / 256^i % 256."""
     return bytes((n // 256 ** i) % 256 for i in reversed(range(w)))
 
@@ -210,9 +210,9 @@ def signed(octet):
 
 
 def header_bytes(h):
-    """Spec.headerBytes: Figure 8. LI, VN and Mode in the first octet,
+    """Ntp.Spec.headerBytes: Figure 8. LI, VN and Mode in the first octet,
     two, three and three bits from the top; Poll and Precision in two's
-    complement (Spec.signedByte)."""
+    complement (Ntp.Spec.signedByte)."""
     return (bytes([(h.leap * 64 + h.version * 8 + h.mode) % 256, h.stratum % 256, h.poll % 256,
                    h.precision % 256])
             + be_bytes(4, h.root_delay) + be_bytes(4, h.root_dispersion) + be_bytes(4, h.ref_id)
@@ -221,23 +221,23 @@ def header_bytes(h):
 
 
 def ext_length(e):
-    """Spec.ExtField.length: the Length field counts the whole field."""
+    """Ntp.Spec.ExtField.length: the Length field counts the whole field."""
     return len(e[1]) + 4
 
 
 def ext_bytes(e):
-    """Spec.extBytes: RFC 7822 Figure 14."""
+    """Ntp.Spec.extBytes: RFC 7822 Figure 14."""
     return be_bytes(2, e[0]) + be_bytes(2, ext_length(e)) + e[1]
 
 
 def packet_bytes(p):
-    """Spec.packetBytes: the header, the fields in order, the MAC."""
+    """Ntp.Spec.packetBytes: the header, the fields in order, the MAC."""
     h, exts, mac = p
     return header_bytes(h) + b"".join(ext_bytes(e) for e in exts) + mac
 
 
 def header_valid(h):
-    """Spec.HeaderValid."""
+    """Ntp.Spec.HeaderValid."""
     return (0 <= h.leap < 4 and h.version in (3, 4) and 1 <= h.mode <= 5 and 0 <= h.stratum < 256
             and -128 <= h.poll < 128 and -128 <= h.precision < 128
             and all(0 <= x < T32 for x in (h.root_delay, h.root_dispersion, h.ref_id))
@@ -245,18 +245,18 @@ def header_valid(h):
 
 
 def ext_valid(e):
-    """Spec.ExtValid: RFC 7822 section 3."""
+    """Ntp.Spec.ExtValid: RFC 7822 section 3."""
     n = ext_length(e)
     return 0 <= e[0] < T16 and 16 <= n and n % 4 == 0 and n < T16
 
 
 def mac_valid(exts, mac):
-    """Spec.MacValid: none, 20 or 24 octets, or the crypto-NAK alone."""
+    """Ntp.Spec.MacValid: none, 20 or 24 octets, or the crypto-NAK alone."""
     return mac == b"" or len(mac) in (20, 24) or (mac == bytes(4) and not exts)
 
 
 def valid(p):
-    """Spec.Valid."""
+    """Ntp.Spec.Valid."""
     h, exts, mac = p
     return (header_valid(h) and all(ext_valid(e) for e in exts) and (h.version != 3 or not exts)
             and mac_valid(exts, mac) and (mac != b"" or not exts or 28 <= ext_length(exts[-1])))
@@ -271,7 +271,7 @@ def header_of(b, poll_unsigned=False):
 
 def decode_spec(b):
     """The packet p with Valid p and packetBytes p = b, or None: what
-    Spec.decode_iff says the decoder gives. The MAC is one of the lengths
+    Ntp.Spec.decode_iff says the decoder gives. The MAC is one of the lengths
     MacValid allows; the octets between the header and the MAC are then
     fields, one after another, each as long as its Length field says,
     since that is how packetBytes writes them."""
@@ -298,7 +298,7 @@ def decode_spec(b):
         if valid(p) and packet_bytes(p) == b:
             found.append(p)
     if len(found) > 1:
-        raise AssertionError(f"two packets for {b.hex()}: Spec.decode_iff says at most one")
+        raise AssertionError(f"two packets for {b.hex()}: Ntp.Spec.decode_iff says at most one")
     return found[0] if found else None
 
 
@@ -693,7 +693,7 @@ def parse_decoded(text):
 
 
 # ---------------------------------------------------------------------
-# Spec/Examples.lean, and Spec.lean's `examples` and `rejects`.
+# Ntp/Spec/Examples.lean, and Ntp/Spec.lean's `examples` and `rejects`.
 
 CLIENT = bytes.fromhex("230206e8000003ff0000037d5ec69f0fe5f662987b61b9afe5f663667b64995d"
                        "e5f6636681405590e5f663a8761dde48")
@@ -719,7 +719,7 @@ TAIL24 = bytes([0x01, 0x04, 0x00, 0x18]) + bytes(range(0x31, 0x45))
 # octets whose Value Length, 0xFFFFFFFF, runs past it (CVE-2014-9750).
 AUTOKEY_ASSOC = (bytes([0x01, 0x02, 0x00, 0x1C, 0, 0, 0, 1]) + bytes(8) + b"\xff\xff\xff\xff" + b"host"
                  + bytes(4))
-# clientHeader, serverHeader and ntsHeader, as Spec/Examples.lean gives
+# clientHeader, serverHeader and ntsHeader, as Ntp/Spec/Examples.lean gives
 # them field by field.
 CLIENT_HEADER = Header(0, 4, 3, 2, 6, -24, 0x000003FF, 0x0000037D, 0x5EC69F0F, 0xE5F662987B61B9AF,
                        0xE5F663667B64995D, 0xE5F6636681405590, 0xE5F663A8761DDE48)
@@ -730,11 +730,11 @@ NTS_HEADER = Header(0, 4, 4, 1, 4, -24, 0, 0x00000060, 0x544D4E4C, 0xE8494892F92
 
 
 def stated(h, fields=(), mac=b""):
-    """A `decode` answer, as Spec.lean states it."""
+    """A `decode` answer, as Ntp/Spec.lean states it."""
     return "OK " + show_packet((h, fields, mac))
 
 
-# What Spec.lean states of an input it says only is accepted
+# What Ntp/Spec.lean states of an input it says only is accepted
 # (`(Ntp.decode b).isSome`): any `OK` answer.
 ACCEPTED = "OK, any packet"
 
@@ -910,7 +910,7 @@ def autokey_field(code, response, length, value_length):
 
 
 def autokey_cases():
-    """(octets, the answer Spec.decode_iff fixes for them) for each
+    """(octets, the answer Ntp.Spec.decode_iff fixes for them) for each
     Autokey case."""
     out = []
     for hb, h in ((CLIENT, CLIENT_HEADER), (SERVER, SERVER_HEADER)):
@@ -1101,7 +1101,7 @@ def decode_inputs(rng, count):
     """Every `decode` input, labelled."""
     for op, args, _ in SPEC_CASES:
         if op == "decode":
-            yield ("Spec.lean's examples and rejects", op, args)
+            yield ("Ntp/Spec.lean's examples and rejects", op, args)
     shapes = [("the client request", CLIENT), ("the server reply", SERVER),
               ("the NTS reply", NTS_REPLY), ("the client request with two fields and a MAC", WITH_MAC),
               ("the crypto-NAK", CRYPTO_NAK), ("the version 3 packet with a MAC", V3_WITH_MAC),
@@ -1247,7 +1247,7 @@ def inputs(seed, count):
     out = list(items)
     for op, args, _ in SPEC_CASES:
         if op != "decode":
-            out.append(("Spec.lean's examples and rejects", op, args))
+            out.append(("Ntp/Spec.lean's examples and rejects", op, args))
     # `encode` of every packet the model reads.
     for label, op, args in items:
         p = decode_spec(args[0])
@@ -1830,7 +1830,7 @@ def main():
         built = "`.lake/build/bin/ntp` as it was, not rebuilt (`--no-build`)"
         if not BUILT_EXE.exists():
             give_up("`--no-build`, and there is no .lake/build/bin/ntp")
-        newest = max(p.stat().st_mtime for p in [ROOT / "Main.lean", ROOT / "Spec" / "Defs.lean"]
+        newest = max(p.stat().st_mtime for p in [ROOT / "Main.lean", ROOT / "Ntp" / "Spec" / "Defs.lean"]
                      + list((ROOT / "Ntp").glob("*.lean")))
         if BUILT_EXE.stat().st_mtime < newest:
             built += "; it is older than the sources"
@@ -1923,7 +1923,7 @@ def main():
                 else:
                     failures.append((f"the Autokey field in {short(hexd(a[0]), 120)}", autokey_stated[a[0]],
                                      f"model {want}; tool {got}"))
-            if label == "Spec.lean's examples and rejects":
+            if label == "Ntp/Spec.lean's examples and rejects":
                 spec_total += 1
                 stated_answer = next(w for o, x, w in SPEC_CASES if o == op and x == a)
                 spec_right += as_stated(want, stated_answer)
@@ -2066,7 +2066,7 @@ def main():
         + f", malformed {len(MALFORMED)}, odd {len(ODD)}, at the end of input {len(AT_EOF)}, command line "
         f"{len(cli)}",
         f"- Answers that differ from the model: {differ_model}",
-        f"- Spec.lean's `examples` and `rejects`, answered by the model as Spec.lean states them: "
+        f"- Ntp/Spec.lean's `examples` and `rejects`, answered by the model as Ntp/Spec.lean states them: "
         f"{spec_right} of {spec_total}",
         f"- The model's two readings of each `decode` input, by `Valid` and `packetBytes` and by SPEC.md's "
         f"one-pass rule, the same: {read_agrees} of {read_total}",

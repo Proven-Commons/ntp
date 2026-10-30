@@ -10,7 +10,7 @@ This library reads and writes one NTP packet, the whole of one UDP payload, in L
 
 Machine-checked proofs show:
 
-- **The reader accepts exactly the packets of the specification, and gives back what they hold.** It accepts a payload exactly when it is the octets of a packet that `Spec/Defs.lean` writes down from RFC 5905 and RFC 7822, and gives that packet. So it reads each payload one way only.
+- **The reader accepts exactly the packets of the specification, and gives back what they hold.** It accepts a payload exactly when it is the octets of a packet that `Ntp/Spec/Defs.lean` writes down from RFC 5905 and RFC 7822, and gives that packet. So it reads each payload one way only.
 - **The header length and each extension field's Length are checked.** A payload shorter than the header is refused, and so is an extension field whose Length runs past the end of the packet, wherever it starts with more than 24 octets left (24 or fewer octets left are read as the MAC). So are versions other than 3 and 4, and modes 0, 6 and 7.
 - **Writing and reading agree.** The writer writes each valid packet as the RFCs lay it out, and reading what it wrote gives the packet back.
 - **Timestamp conversion is exact.** A timestamp in a given era converts to the exact Unix time, and back. The timestamp 0, which means unknown, converts to nothing in every era, never to 1900.
@@ -23,7 +23,7 @@ Status: in progress. The specification has not yet been approved by a reviewer a
 
 ## Use it
 
-From Lean, on `List UInt8`, with the structures of `Spec/Defs.lean`:
+From Lean, on `List UInt8`, with the structures of `Ntp/Spec/Defs.lean`:
 
 - `Ntp.decode : List UInt8 → Option Packet`: the packet in one UDP payload: its header, its extension fields and its MAC.
 - `Ntp.encode : Packet → List UInt8`: the octets of a packet.
@@ -34,22 +34,22 @@ From Lean, on `List UInt8`, with the structures of `Spec/Defs.lean`:
 
 ## What is proved
 
-The statements are in `Spec.lean`. The definitions they use are in `Spec/Defs.lean`, written from RFC 5905 (Figure 8 and sections 6 and 7.3) and RFC 7822 (section 3), and the proofs are in `Proofs/`.
+The statements are in `Ntp/Spec.lean`. The definitions they use are in `Ntp/Spec/Defs.lean`, written from RFC 5905 (Figure 8 and sections 6 and 7.3) and RFC 7822 (section 3), and the proofs are in `Ntp/Proofs/`.
 
 | Claim | Theorem |
 |-------|---------|
-| The decoder accepts exactly the octets of a valid packet, and gives that packet. | `Spec.decode_iff` |
-| The encoder writes every valid packet as RFC 5905 Figure 8 and RFC 7822 Figure 14 lay it out. | `Spec.encode_eq` |
-| Encoding a packet and decoding the octets gives the packet back exactly when it is valid. | `Spec.decode_encode` |
-| Encoding a decoded packet gives back the octets it was read from. | `Spec.encode_decode` |
-| A payload shorter than the 48-octet header is refused. | `Spec.decode_short` |
-| A packet whose version is not 3 or 4 is refused. | `Spec.decode_version` |
-| A packet of mode 0, 6 or 7 is refused. | `Spec.decode_mode` |
-| An extension field whose Length runs past the end of the packet is refused, wherever it starts with more than 24 octets left (24 or fewer are read as the MAC), and whatever the rest of the packet holds. | `Spec.decode_ext_overrun` |
-| The timestamp 0 converts to no Unix time, in any era. | `Spec.toUnix_zero` |
-| A timestamp in an era converts to exactly its Unix time: `era * 2^32` plus its seconds and fraction, less 2,208,988,800 seconds. | `Spec.toUnix_spec` |
-| Converting a timestamp to Unix time and back gives it back, and so does converting a Unix time to a timestamp and back. | `Spec.fromUnix_toUnix`, `Spec.toUnix_fromUnix` |
-| A client request and a server reply captured on a network, read field by field; a captured reply with two extension fields; packets with a MAC, a crypto-NAK, and version 3; an Autokey field whose Value Length runs past the field, given back as it is; the end of era 0 in 2036, worked by hand. Fourteen packets that each break one rule are refused, each after a packet that differs from it only there and is accepted. | `Spec.examples`, `Spec.rejects` |
+| The decoder accepts exactly the octets of a valid packet, and gives that packet. | `Ntp.Spec.decode_iff` |
+| The encoder writes every valid packet as RFC 5905 Figure 8 and RFC 7822 Figure 14 lay it out. | `Ntp.Spec.encode_eq` |
+| Encoding a packet and decoding the octets gives the packet back exactly when it is valid. | `Ntp.Spec.decode_encode` |
+| Encoding a decoded packet gives back the octets it was read from. | `Ntp.Spec.encode_decode` |
+| A payload shorter than the 48-octet header is refused. | `Ntp.Spec.decode_short` |
+| A packet whose version is not 3 or 4 is refused. | `Ntp.Spec.decode_version` |
+| A packet of mode 0, 6 or 7 is refused. | `Ntp.Spec.decode_mode` |
+| An extension field whose Length runs past the end of the packet is refused, wherever it starts with more than 24 octets left (24 or fewer are read as the MAC), and whatever the rest of the packet holds. | `Ntp.Spec.decode_ext_overrun` |
+| The timestamp 0 converts to no Unix time, in any era. | `Ntp.Spec.toUnix_zero` |
+| A timestamp in an era converts to exactly its Unix time: `era * 2^32` plus its seconds and fraction, less 2,208,988,800 seconds. | `Ntp.Spec.toUnix_spec` |
+| Converting a timestamp to Unix time and back gives it back, and so does converting a Unix time to a timestamp and back. | `Ntp.Spec.fromUnix_toUnix`, `Ntp.Spec.toUnix_fromUnix` |
+| A client request and a server reply captured on a network, read field by field; a captured reply with two extension fields; packets with a MAC, a crypto-NAK, and version 3; an Autokey field whose Value Length runs past the field, given back as it is; the end of era 0 in 2036, worked by hand. Fourteen packets that each break one rule are refused, each after a packet that differs from it only there and is accepted. | `Ntp.Spec.examples`, `Ntp.Spec.rejects` |
 
 The packets this reader accepts are those of version 3 or 4 and mode 1 to 5, whose extension fields each have a Length that is a multiple of 4 from 16 to 65532, whose MAC is none, 20 or 24 octets, or four zero octets (the crypto-NAK) with no extension field, whose last extension field is at least 28 octets when there is no MAC, and which, in version 3, have no extension field. `SPEC.md` gives the RFC text for each rule, says which rules are this reader's own choice where the RFCs leave one open, such as what may follow the header of a version 3 packet, and says where chrony, ntpd, ntpd-rs, NTPsec and Wireshark choose differently.
 
@@ -87,17 +87,17 @@ python3 tests/run_tests.py
 python3 tests/plant_bugs.py
 ```
 
-`lake comparator --paranoid` builds the statements and the proofs in a sandbox. It checks that each theorem in `Proofs/` proves exactly the statement in `Spec.lean`, using only the axioms `propext`, `Classical.choice`, and `Quot.sound`, and replays it through every kernel shipped with Lean.
+`lake comparator --paranoid` builds the statements and the proofs in a sandbox. It checks that each theorem in `Ntp/Proofs/` proves exactly the statement in `Ntp/Spec.lean`, using only the axioms `propext`, `Classical.choice`, and `Quot.sound`, and replays it through every kernel shipped with Lean.
 
 `tests/run_tests.py` sends the tool packets and timestamps from a recorded seed and checks every answer against a model of RFC 5905 and RFC 7822 written in Python. It reads the same packets with the other readers, and counts each difference under the choice of that reader's that makes it, such as ntpd-rs taking any 4 to 24 octets after the fields as a MAC, or NTPsec reading Poll as unsigned; the model, with those choices, gives each reader's answer. `tests/plant_bugs.py` plants one-line bugs in the code and checks that the tests catch each one.
 
 ## Layout
 
 - `Ntp/Packet.lean` and `Ntp/Time.lean`: the code under proof.
-- `Spec.lean`: the statements, with `sorry` for proofs. A reviewer approves this file.
-- `Spec/Defs.lean`: the definitions the statements use, written from the RFCs.
-- `Spec/Examples.lean`: the inputs of the examples: three captured packets, and packets written by hand from them.
-- `Proofs.lean` and `Proofs/`: the proofs.
+- `Ntp/Spec.lean`: the statements, with `sorry` for proofs. A reviewer approves this file.
+- `Ntp/Spec/Defs.lean`: the definitions the statements use, written from the RFCs.
+- `Ntp/Spec/Examples.lean`: the inputs of the examples: three captured packets, and packets written by hand from them.
+- `Ntp/Proofs.lean` and `Ntp/Proofs/`: the proofs.
 - `Main.lean`: the command-line tool the tests drive.
 - `lakefile.toml`: the build. It names the package and its version, its libraries and executable, and the default targets, and sets nothing else.
 - `comparator.json`: which theorems `lake comparator` checks, and which axioms it allows.

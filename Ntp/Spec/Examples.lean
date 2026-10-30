@@ -1,7 +1,7 @@
-import Spec.Defs
+import Ntp.Spec.Defs
 
 /-!
-  The inputs of `Spec.examples` and `Spec.rejects`.
+  The inputs of `Ntp.Spec.examples` and `Ntp.Spec.rejects`.
 
   The first three packets were captured on a network by the ntpd-rs
   project, which keeps them as test vectors in
@@ -12,7 +12,7 @@ import Spec.Defs
   written by hand from them.
 -/
 
-namespace Spec
+namespace Ntp.Spec
 
 /-- A client request, as captured: version 4, mode 3 (client). -/
 def clientRequest : List UInt8 :=
@@ -128,4 +128,4 @@ def autokeyAssoc : List UInt8 :=
   [0x01, 0x02, 0x00, 0x1C, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0xFF, 0xFF, 0xFF, 0xFF, 0x68, 0x6F, 0x73, 0x74, 0x00, 0x00, 0x00, 0x00]
 
-end Spec
+end Ntp.Spec

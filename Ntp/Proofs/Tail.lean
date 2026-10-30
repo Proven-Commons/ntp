@@ -1,13 +1,13 @@
-import Proofs.Bytes
+import Ntp.Proofs.Bytes
 
 /-!
   The octets after the header: extension fields and the MAC, against
-  `Spec.extBytes`, `Spec.ExtValid` and `Spec.MacValid`.
+  `Ntp.Spec.extBytes`, `Ntp.Spec.ExtValid` and `Ntp.Spec.MacValid`.
 -/
 
 namespace NtpProofs
 
-open Spec Ntp
+open Ntp.Spec Ntp
 
 theorem longer_iff (n : Nat) (t : List UInt8) : longer n t = true ↔ n < t.length := by
   induction t generalizing n with

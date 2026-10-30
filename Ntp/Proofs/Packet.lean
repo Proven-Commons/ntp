@@ -1,14 +1,14 @@
-import Proofs.Header
-import Proofs.Tail
+import Ntp.Proofs.Header
+import Ntp.Proofs.Tail
 
 /-!
-  The decoder and the encoder against `Spec.packetBytes` and
-  `Spec.Valid`.
+  The decoder and the encoder against `Ntp.Spec.packetBytes` and
+  `Ntp.Spec.Valid`.
 -/
 
 namespace NtpProofs
 
-open Spec Ntp
+open Ntp.Spec Ntp
 
 theorem decode_some (b : List UInt8) (p : Packet) (H : decode b = some p) :
     Valid p ∧ b = packetBytes p := by

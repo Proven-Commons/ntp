@@ -1,12 +1,12 @@
-import Proofs.Bytes
+import Ntp.Proofs.Bytes
 
 /-!
-  The header reader against `Spec.headerBytes` and `Spec.HeaderValid`.
+  The header reader against `Ntp.Spec.headerBytes` and `Ntp.Spec.HeaderValid`.
 -/
 
 namespace NtpProofs
 
-open Spec Ntp
+open Ntp.Spec Ntp
 
 theorem headerBytes_length (h : Header) : (headerBytes h).length = 48 := by
   simp [headerBytes, beBytes_length]

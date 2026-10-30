@@ -2,12 +2,12 @@ import Ntp
 
 /-!
   Fixed-width fields: `take?`, big-endian integers, `readBE` and
-  `writeBE`, against `Spec.beBytes`.
+  `writeBE`, against `Ntp.Spec.beBytes`.
 -/
 
 namespace NtpProofs
 
-open Spec Ntp
+open Ntp.Spec Ntp
 
 theorem take?_eq (w : Nat) (b c r : List UInt8) :
     take? w b = some (c, r) ↔ c.length = w ∧ b = c ++ r := by

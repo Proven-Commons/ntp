@@ -1,11 +1,11 @@
 {
-  "challenge_module": "Spec",
-  "solution_module": "Proofs",
+  "challenge_module": "Ntp.Spec",
+  "solution_module": "Ntp.Proofs",
   "theorem_names": [
-    "Spec.decode_iff", "Spec.encode_eq", "Spec.decode_encode", "Spec.encode_decode",
-    "Spec.decode_short", "Spec.decode_version", "Spec.decode_mode", "Spec.decode_ext_overrun",
-    "Spec.toUnix_zero", "Spec.toUnix_spec", "Spec.fromUnix_toUnix", "Spec.toUnix_fromUnix",
-    "Spec.examples", "Spec.rejects"
+    "Ntp.Spec.decode_iff", "Ntp.Spec.encode_eq", "Ntp.Spec.decode_encode", "Ntp.Spec.encode_decode",
+    "Ntp.Spec.decode_short", "Ntp.Spec.decode_version", "Ntp.Spec.decode_mode", "Ntp.Spec.decode_ext_overrun",
+    "Ntp.Spec.toUnix_zero", "Ntp.Spec.toUnix_spec", "Ntp.Spec.fromUnix_toUnix", "Ntp.Spec.toUnix_fromUnix",
+    "Ntp.Spec.examples", "Ntp.Spec.rejects"
   ],
   "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"]
 }

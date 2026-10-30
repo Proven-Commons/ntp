@@ -10,7 +10,7 @@
   order" (RFC 5905 7.3). This file uses nothing from the code.
 -/
 
-namespace Spec
+namespace Ntp.Spec
 
 /-! ## Integers -/
 
@@ -182,4 +182,4 @@ def Valid (p : Packet) : Prop :=
     era 0, era offset 2,208,988,800). -/
 def unixEpoch : Nat := 2208988800
 
-end Spec
+end Ntp.Spec
